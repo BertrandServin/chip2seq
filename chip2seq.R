@@ -1,11 +1,14 @@
 library(tidyverse)
+library(seqinr)
+library(Rsamtools)
+library(BSgenome)
+
 WD = 'capra_hircus/'
 Manifile = 'Goat_IGGC_65K_v2_15069617X365016_A2.csv'
 BWADB = 'Capra_hircus'
 manifest = read_csv(paste0(WD,'manifests/',Manifile),skip=7) %>% drop_na()
 
 ##testm=head(manifest)
-library(seqinr)
 
 ## align probeseq Sequances
 ## Maybe try using blaster package at some point. This can take a while.
@@ -35,6 +38,7 @@ colnames(assembly) = c('CHRNAME', 'RNAME')
 annot = manifest.annot %>% select(Name,IlmnStrand,strand,Chr,MapInfo,SNP,RNAME,POS) %>% left_join(assembly)
 annot = annot %>% mutate(CHRNAME = replace_na(CHRNAME,'0')) %>% mutate(refpos = ifelse(strand=='minus',POS-1,POS+50))
 annot.gd = annot %>% filter(CHRNAME!='0')
+fasta_file=FaFile("capra_hircus/fasta/Capra_hircus")
 gr1 = GRanges(annot.gd$RNAME,IRanges(start=annot.gd$refpos,end=annot.gd$refpos))
 refbase=getSeq(fasta_file,gr1)
 annot.gd$REF = as.data.frame(refbase)$x
