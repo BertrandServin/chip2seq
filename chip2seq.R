@@ -2,7 +2,7 @@ library(tidyverse)
 WD = 'capra_hircus/'
 Manifile = 'Goat_IGGC_65K_v2_15069617X365016_A2.csv'
 BWADB = 'Capra_hircus'
-manifest = read_csv(paste0(WD,'manifests/',Manifile),skip=7)
+manifest = read_csv(paste0(WD,'manifests/',Manifile),skip=7) %>% drop_na()
 
 ##testm=head(manifest)
 library(seqinr)
@@ -12,14 +12,12 @@ library(seqinr)
 write.fasta(sequences=as.list(manifest$AlleleA_ProbeSeq), names=manifest$Name, paste0(WD,"fasta/alleleA_probeseq.fa"),open='w')
 cmd = paste0("bwa mem -o ",WD,"sam/alleleA_probseq.sam ",WD,"bwadb/",BWADB," ",WD,"fasta/alleleA_probeseq.fa")
 system(cmd)
-##system("blastn -query data/alleleA_probeseq.fa -db data/my_db -max_target_seqs 1 -max_hsps 5 -outfmt \"10 qseqid qstart qend saccver sseqid sstart send evalue length mismatch sstrand\"  > data/alleleA_probseq.blast)
 
 ##  align context sequence
 context.seq = manifest %>% mutate(contextSeq=str_replace(SourceSeq,"\\[[ATGC]\\/[ATGC]\\]","N")) %>% select(Name,contextSeq)
 write.fasta(sequences=as.list(context.seq$contextSeq), names=context.seq$Name, paste0(WD,"fasta/context.seq.fa"),open="w")
 cmd = paste0("bwa mem -o ",WD,"sam/context.seq.sam ",WD,"bwadb/",BWADB," ",WD,"fasta/context.seq.fa")
 system(cmd)
-##system("blastn -query data/context.seq.fa -db data/my_db  -qcov_hsp_perc 99 -outfmt \"10 qseqid saccver sseqid sstart send \" | grep  \",1$\"  > data/context.seq.blast")
 
 Aprobe.sam = read_table("capra_hircus/sam/alleleA_probseq.sam",
     comment="@",
@@ -27,16 +25,19 @@ Aprobe.sam = read_table("capra_hircus/sam/alleleA_probseq.sam",
         mutate(Name=QNAME,strand = ifelse(FLAG==0,"plus","minus")) %>% select(Name,RNAME,POS,FLAG,strand)
                         
 manifest.annot = manifest %>% left_join(Aprobe.sam) %>% filter(IlmnStrand %in% c('TOP','BOT'))
+manifest.annot %>% select(Name,IlmnStrand,strand,Chr,RNAME,MapInfo,POS,SNP)
+## Get Chromosome numbers from NCBI REF
+assembly  = read_table('capra_hircus/fasta/GCF_001704415.1_ARS1_assembly_report.txt',comment='#',col_names=F)
+assembly = assembly %>% select(X3,X7) 
+colnames(assembly) = c('CHRNAME', 'RNAME')
 
+## Get Reference Alleles
+annot = manifest.annot %>% select(Name,IlmnStrand,strand,Chr,MapInfo,SNP,RNAME,POS) %>% left_join(assembly)
+annot = annot %>% mutate(CHRNAME = replace_na(CHRNAME,'0')) %>% mutate(refpos = ifelse(strand=='minus',POS-1,POS+50))
+annot.gd = annot %>% filter(CHRNAME!='0')
+gr1 = GRanges(annot.gd$RNAME,IRanges(start=annot.gd$refpos,end=annot.gd$refpos))
+refbase=getSeq(fasta_file,gr1)
+annot.gd$REF = as.data.frame(refbase)$x
+write_csv(annot.gd, file=paste0(WD,'manifests/',Manifile,'.annot'))
 
-
-## Read in blast data
-## probeseq.blast=read_csv('data/alleleA_probseq.blast',col_names=c('qseqid','qstart','qend','saccver','sseqid','sstart','send','evalue','length','mismatch','sstrand'))
- 
-## context.blast=read_csv('data/context.seq.blast', col_names=c('qseqid','c.saccver','c.sseqid','c.sstart','c.send','c.evalue', 'c.length', 'c.mismatch'))
-
-## blastres = left_join(probeseq.blast,context.blast) %>% mutate(matchpos = (sstart>=c.sstart)&(sstart<=c.send)&(send>=c.sstart)&(send<=c.send))
-
-##  %>% filter(mismatch<3) %>% group_by(qseqid) %>% filter(row_number()==1) %>%
-##     mutate(strand=if_else((send-sstart)>0,'+','-') )
 
