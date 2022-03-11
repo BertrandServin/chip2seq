@@ -6,7 +6,7 @@ library(BSgenome)
 WD = 'capra_hircus/'
 Manifile = 'Goat_IGGC_65K_v2_15069617X365016_A2.csv'
 BWADB = 'Capra_hircus'
-manifest = read_csv(paste0(WD,'manifests/',Manifile),skip=7) %>% drop_na()
+manifest = read_csv(paste0(WD,'manifests/',Manifile),skip=7) %>% drop_na(AlleleA_ProbeSeq)
 
 ##testm=head(manifest)
 
